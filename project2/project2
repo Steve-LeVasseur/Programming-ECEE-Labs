@@ -1,0 +1,313 @@
+#include <iostream>
+#include <windows.h>
+#include <fstream>
+#include <vector>
+#include <sstream>
+
+//this is just a quick macro for looping from 0 to a given value in increments of 1 because
+//you do that a lot when navigating arrays and i was too lazy to type the full for loop out
+//every time
+#define quickfor(i,max) for(i = 0; i < max; i++)
+#define ifnt else
+
+
+using namespace std;
+
+//these global variables track the controls for the game of life
+//cells with neighbors less than the deathnumber die of underpopulation
+//cells with neighbors greater than the lifenumber die of overpopulation
+//cells with neighbors between those values survive
+//cells with exactly lifenumber neighbors are born
+//gentime is the amount of time between generations
+int deathnumber;
+int lifenumber;
+int gentime;
+
+// Creates a structure that defines each cell
+//each cell tracks its coordinate in the grid of cells
+//each cell also tracks whether it is currently alive, whether it was alive in the last generation,
+//   and the number of live cells neighboring it.
+// the set function allows the cell's coordinates and initial state to be easily set
+// the update function determines if the cell should change form life to death or vise versa
+// the overloaded << operator allows the cell to be easily printed
+// the overloaded = operator allows the cell to be set to another cell
+struct cell{
+    bool alive = false, lastAlive = false;
+    COORD mycoord;
+    int liveneighbors = 0;
+    void set(int inx, int iny, bool inlife);
+    void update();
+    friend ostream &operator << (ostream &out, cell &c){
+        if(c.alive){
+            out << static_cast<char>(219) << static_cast<char>(219);
+        }ifnt{
+            out << "  ";
+        }
+        return out;
+    }
+    void operator = (cell &c){
+        this->alive = c.alive;
+        this->lastAlive = c.lastAlive;
+        this->mycoord.X = c.mycoord.X;
+        this->mycoord.Y = c.mycoord.Y;
+        this->liveneighbors = c.liveneighbors;
+    }
+};
+
+//this sets the cells x and y coordinates in the grid as well as its initial state
+void cell::set(int inx, int iny, bool inlife){
+    mycoord.X = inx;
+    mycoord.Y = iny;
+    alive = inlife;
+    lastAlive = !inlife;
+    liveneighbors = 0;
+}
+
+//this compares the number of live neighbors to the life and death numbers to determine what state the cell should be in next generation
+void cell::update(){
+    if(alive){
+        if(liveneighbors < deathnumber || liveneighbors > lifenumber) alive = false;
+        ifnt alive = true;
+    }ifnt{
+        if(liveneighbors == lifenumber) alive = true;
+        ifnt alive = false;
+    }
+}
+
+//these are more global variables
+//maxsize is the maximum size of the grid
+//board tracks the grid the cells are on
+//stdhandle is the output console, so that it can be more easily manipulated
+const int maxsize = 50; // Declare board size as 50x50
+cell board[maxsize][maxsize];
+HANDLE stdhandle = GetStdHandle(STD_OUTPUT_HANDLE);
+
+// Turns each line of input map into vector of integers that will become the board
+vector<int> breakupstring(string str){
+    vector<int> numdata;
+    int i = 0;
+    int temp;
+    quickfor(i,str.size()){
+        temp = static_cast<int>(str.at(i)) - 48;
+        numdata.push_back(temp);
+    }
+
+    return numdata;
+}
+
+// Checks input rules for errors
+//the deathnumber is invalid if it is less than 0 or greater than 8
+//the lifenumber is invalid if it is less than the deathnumber or greater than 8
+//gentime is invalid if it is less than 0, as you cannot wait -5 seconds for something to happen
+//if any of these conditions are not met, a corresponding error is thrown
+void verifyins(int death, int life, int times){
+    if(death < 0 || death > 8){
+        throw("Death number error. Check your death number and try again.");
+    }
+    //note, at this point in programing, steve said "well, we could compare life to death"
+    if(life < death || life > 8){
+        throw("Life number error. Check your life number and try again.");
+    }
+    if(times < 0){
+        throw("Generation time error. Check your value for the time per generation and try again.");
+    }
+}
+
+//this inputs the initial conditions of the board from the input file
+//an error is thrown if
+//  the file is not opened successfully
+//  the set of control parameters for the game are not detected
+//  any values in the initial grid are not 0 or 1
+//if the user did not fill up the text file witha  full 50x50 grid, the unentered cells are automaticlaly set to "dead"
+//the board is then printed with a nice border
+void setupBoard(string filename){ // Sets up the board
+    int i,j;
+    string tempstr;
+    stringstream ss;
+    vector<int> tempvec;
+    ifstream infile(filename);
+
+    if(!infile.is_open()){
+        throw("File error: file was not opened successfully");
+    }
+    getline(infile, tempstr);
+    if(tempstr.find(" ") == -1){
+        throw("Parameters Error: no parameters found");
+    }
+    ss << tempstr;
+    ss >> deathnumber >> lifenumber >> gentime;
+    verifyins(deathnumber, lifenumber, gentime);
+    quickfor(i,maxsize){
+        if(!infile.eof()){
+            getline(infile, tempstr);
+            tempvec = breakupstring(tempstr);
+        }ifnt{
+            tempvec = {};
+        }
+        if(tempvec.size() < maxsize){
+            for(int a = tempvec.size(); a < maxsize; a++){
+                tempvec.push_back(0);
+            }
+        }
+        quickfor(j,maxsize){
+            if(tempvec.at(j) != 0 && tempvec.at(j) != 1){
+                throw("Error: unexpected value in initial grid\nYOU FOOL! YOU HAVE 2 NUMBERS TO CHOOSE FROM AND THEY ARE LITTERALLY THE EASIEST 2 NUMBERS!\nHOW THE HELL DID YOU POSSIBLY MESS THAT UP!?");
+            }
+            board[i][j].set(j * 2, i, static_cast<bool>(tempvec.at(j)));
+        }
+    }
+    i = 0;
+    j = 0;
+    quickfor(i, maxsize){
+        quickfor(j, maxsize){
+            cout << board[i][j];
+        }
+        cout << static_cast<char>(186) << endl;
+    }
+    quickfor(j,maxsize){
+        cout << static_cast<char>(205) << static_cast<char>(205);
+    }
+    cout << static_cast<char>(206) << endl;
+
+}
+
+//this function goes to each cell and checks how many live neighbors it has
+//it then records that number in each cell's liveneighbors variable
+void updateBoard(){ // Updates the board for the next generation
+    int i,j;
+    int aliveneighbors = 0;
+    int neti = 0, netj = 0;
+    quickfor(i,maxsize){
+
+        quickfor(j,maxsize){
+            aliveneighbors = 0;
+            for(int i1 = -1; i1 < 2; i1++){
+                for(int j1 = -1; j1 < 2; j1++){
+                    if(i1 == 0 && j1 == 0){
+                        continue;
+                    }
+                    neti = i + i1;
+                    neti = ((neti % maxsize) + maxsize) % maxsize;
+                    netj = j + j1;
+                    netj = ((netj % maxsize) + maxsize) % maxsize;
+                    if(board[neti][netj].alive){
+                        aliveneighbors++;
+                    }
+                }
+            }
+            board[i][j].liveneighbors = aliveneighbors;
+        }
+    }
+}
+
+
+//this is an overload of << to more easily print vectors
+//i do not believe it is used in the final program, but it was used during testing, so to be safe it shal remain
+ostream &operator << (ostream &out, vector<int> &v){
+    for(int i = 0; i < v.size(); i++){
+        out << v.at(i) << endl;
+    }
+    return out;
+}
+
+//this is an overload of the << to more easily print the board
+//the update function of the cells, which looks at the current number of live neighbors and updates the cell accordingly,
+//  is called here, not in the updateBoard function, which simply updates the number of live neighbors, not the actual state of each cell
+//this is done to prevent logic errors where a cell checks its neighbors,updates itself, and then its value is changed which will affect the neighbors
+//this way, the entire generation is checked before anyone changes.
+//for visual's sake, the cursor automatically goes to the location of cells whose values do change and only updates those cells, rather than reprinting the entire board
+
+ostream &operator << (ostream &out, cell arr[maxsize][maxsize]){
+    int i,j;
+    cell tempc;
+    quickfor(i,maxsize){
+        quickfor(j,maxsize){
+            arr[i][j].lastAlive = arr[i][j].alive;
+            arr[i][j].update();
+            tempc = arr[i][j];
+            if(tempc.alive ^ tempc.lastAlive){
+                SetConsoleCursorPosition(stdhandle, tempc.mycoord);
+                out << tempc;
+            }
+        }
+    }
+    return out;
+}
+
+//this funciton just makes it so that the blinking cursor is not shown while the game is running because
+//it was bugging me and i'm just enough ocd that i wanted it to not be there
+void ShowConsoleCursor(bool showFlag)
+{
+
+    CONSOLE_CURSOR_INFO     cursorInfo;
+
+    GetConsoleCursorInfo(stdhandle, &cursorInfo);
+    cursorInfo.bVisible = showFlag; // set the cursor visibility
+    SetConsoleCursorInfo(stdhandle, &cursorInfo);
+}
+
+
+//this prints out the instructions for how the program works. it explains how the input file is suppossed to be setup then prompts the user for the file's name
+string start(){ // Gives the user information on how the program works
+    string temps;
+    cout << "Welcome to The Game of Life!" << endl << endl;
+    cout << "To begin your simulation, you'll need to import a .txt file with the following properties:"<< endl;
+    cout << "The first entry is a number (0-8) that dictates how many neighbors a living cell needs to not die of underpopulation." << endl;
+    cout << "The second entry is a space." << endl;
+    cout << "The third entry is a number (1-8) that dictates how many neighbors a dead cell needs to have to become alive." << endl;
+    cout << "A cell with an amount of neighbors greater than this number dies of overpopulation." << endl;
+    cout << "The fourth entry is a space" << endl;
+    cout << "The fifth entry is the time between generations in milliseconds." << endl;
+    cout << "The first entry should be less than the third entry." << endl;
+    cout << "The file should then start a new line." << endl;
+    cout << "The file is saved in the same folder as this program's .cpp file." << endl;
+    cout << "An Excel file has been included for easy file creation. The resulting text file will be named \"gameOfLife.txt\"" << endl << endl;
+
+    cout << "The next entries should be a set of 0s and 1s that form a rectangular shape such as the one shown below:" << endl;
+    cout << "00000" << endl << "01000" << endl << "00100" << endl << "00010" << endl << "00000" << endl;
+    cout << "Each 0 represents a cell which will start the simulation 'dead,' while each 1 will start the game 'alive.'" << endl;
+    cout << "A 50x50 grid will be created using the file, but the file itself cannot have more than 50 rows or columns." << endl;
+    cout << "If the file has fewer than 50 rows or columns, the unspecifed spaces in the grid will be filled with dead cells." << endl << endl;
+
+    cout << "You can escape the simulation at any time by pressing the Escape button." << endl << endl;
+
+    cout << "Now that you know the rules, please input your txt file: ";
+    cin >> temps;
+    return temps;
+}
+
+//the main funciton calls all related function to:
+//  get the input file name from the user
+//  setup the boards intial conditions from the input file
+//  update each generation and reprint the new generation until the user presses escape to end the program
+int main()
+{
+    string infilename = start(); // Gives user rule information and prompts them to input txt file
+    cout << "Filename entered. Your game will begin shortly" << endl;
+    Sleep(3000);
+    system("cls");
+    try{
+        setupBoard(infilename);
+    }catch(char const* s){
+        cout << s << endl;
+        cout << "INPUT FILE ERROR: CHECK YOUR INPUT FILE AND TRY AGAIN" << endl;
+        return 1;
+    }catch(...){
+        cout << "INPUT FILE ERROR: CHECK YOUR INPUT FILE AND TRY AGAIN" << endl;
+        return 1;
+    }
+
+    Sleep(gentime);
+    ShowConsoleCursor(false);
+    while(true){
+        updateBoard();
+        cout << board;
+
+        if(GetAsyncKeyState(VK_ESCAPE)){
+            while(GetAsyncKeyState(VK_ESCAPE)){}
+            break;
+        }
+        Sleep(gentime);
+    }
+    return 0;
+}
